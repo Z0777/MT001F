@@ -1,0 +1,484 @@
+PASO 1 — App → OnStart
+
+Agrega al final del bloque de variables:
+
+powerfx
+Set(gloCalRefMant; Date(Year(Today()); Month(Today()); 1));;
+Set(gloCalDiaSelMant; If(false; Today()));;
+Set(varDrawerCalMant; false);;
+Set(varVistaMant; "lista");;
+ClearCollect(colCarritoPreventivo; Filter(DB; false));;
+ClearCollect(
+    colDBCal;
+    ForAll(
+        Filter(DB; false) As R;
+        {
+            IDSP: R.ID;
+            AREA: R.AREA;
+            MODULO: R.MODULO;
+            DESCRIPCION: R.DESCRIPCION;
+            CATEGORIA: R.CATEGORIA;
+            USO: R.USO;
+            MEDIDA: R.'UNIDAD MEDIDA';
+            INSTALACION: R.INSTALACION;
+            VIDAUTIL: 0;
+            FECHAMANT: Today();
+            DIAS: 0;
+            ESTADOCALC: ""
+        }
+    )
+);;
+ClearCollect(
+    colCalCeldasMant;
+    ForAll(
+        Sequence(1) As E;
+        {Idx: 0; EsVacia: true; Dia: 0; FechaCelda: If(false; Today())}
+    )
+);;
+Clear(colCalCeldasMant);;
+
+Filter(DB; false) devuelve cero filas pero con el esquema completo. Eso declara las colecciones sin insertar datos falsos.
+
+PASO 2 — Pantalla 04TABLEROPREVENTIVOASIGNACIONES_1
+04TABLEROPREVENTIVOASIGNACIONES_1 → OnVisible
+powerfx
+Set(varOrigenSolicitud; "PREVENTIVO");;
+Set(varDrawerCalMant; false);;
+Set(gloCalRefMant; Date(Year(Today()); Month(Today()); 1));;
+Reset(Tipo_3);;
+ClearCollect(
+    colDBCal;
+    ForAll(
+        DB As R;
+        With(
+            {
+                f: If(
+                    IsBlank(R.CAMBIO);
+                    DateAdd(R.INSTALACION; Value(R.'VIDA UTIL'); TimeUnit.Days);
+                    R.CAMBIO
+                )
+            };
+            With(
+                {
+                    fd: Date(Year(f); Month(f); Day(f));
+                    dd: DateDiff(Today(); f; TimeUnit.Days)
+                };
+                {
+                    IDSP: R.ID;
+                    AREA: R.AREA;
+                    MODULO: R.MODULO;
+                    DESCRIPCION: R.DESCRIPCION;
+                    CATEGORIA: R.CATEGORIA;
+                    USO: R.USO;
+                    MEDIDA: R.'UNIDAD MEDIDA';
+                    INSTALACION: R.INSTALACION;
+                    VIDAUTIL: Value(R.'VIDA UTIL');
+                    FECHAMANT: fd;
+                    DIAS: dd;
+                    ESTADOCALC: If(dd < 0; "VENCIDO"; dd <= 30; "POR VENCER"; "VIGENTE")
+                }
+            )
+        )
+    )
+);;
+Select(btnBuildCalMant)
+
+El ForAll sobre DB trae hasta el límite de filas de la app. Ve a Configuración → General → Límite de filas de datos y súbelo a 2000.
+
+Datosprincipales_1 → Visible
+powerfx
+varVistaMant = "lista"
+PASO 3 — Controles nuevos
+Ubicación	Control nuevo	Tipo
+cntDH04_5 (barra de filtros)	btnVistaMant	Classic/Button
+cntDV03_2, justo después de Datosprincipales_1	conCalMant	GroupContainer AutoLayout Vertical
+↳ conCalMant	btnBuildCalMant	Classic/Button (Visible = false)
+↳ conCalMant	conKPIMant	GroupContainer AutoLayout Horizontal
+↳↳ conKPIMant	cardTotMant, cardVenMant, cardPorMant, cardVigMant	GroupContainer (cada uno con lblTitXX + lblValXX)
+↳ conCalMant	conNavMesMant	GroupContainer AutoLayout Horizontal
+↳↳ conNavMesMant	icoMesPrev, lblCalMesMant, icoMesNext	ModernIcon / Label / ModernIcon
+↳ conCalMant	conCalHeadMant	GroupContainer Horizontal (7 Labels: lblD1…lblD7)
+↳ conCalMant	glCalMant	Gallery (Vertical, WrapCount = 7)
+↳↳ glCalMant	celCalMant	GroupContainer AutoLayout Vertical
+↳↳↳ celCalMant	htmlCelMant	HtmlViewer
+↳↳ glCalMant	btnCelMant	Classic/Button (transparente, encima)
+raíz de la pantalla	conDrawerCalMant	GroupContainer ManualLayout
+↳ conDrawerCalMant	btnScrimCalMant	Classic/Button
+↳ conDrawerCalMant	pnlDiaMant	GroupContainer AutoLayout Vertical
+↳↳ pnlDiaMant	lblDiaMantTit	Label
+↳↳ pnlDiaMant	glDiaMant	Gallery Vertical
+↳↳↳ glDiaMant	filaDiaMant (container) con lblDA, lblDM, lblDF, lblDE, btnDiaSel	—
+↳↳ pnlDiaMant	btnCerrarDia, btnAgregarDia	Classic/Button
+PASO 4 — Interruptor de vista
+btnVistaMant → OnSelect
+powerfx
+Set(varVistaMant; If(varVistaMant = "lista"; "calendario"; "lista"));;
+If(varVistaMant = "calendario"; Select(btnBuildCalMant))
+btnVistaMant → Text
+powerfx
+If(varVistaMant = "lista"; "📅 Calendario"; "📋 Lista")
+btnVistaMant → Fill
+powerfx
+RGBA(9; 33; 98; 1)
+btnVistaMant → Width
+powerfx
+150
+PASO 5 — Contenedor del calendario
+conCalMant → Visible
+powerfx
+varVistaMant = "calendario"
+conCalMant → Width
+powerfx
+Parent.Width
+conCalMant → LayoutGap
+powerfx
+10
+conCalMant → Fill
+powerfx
+RGBA(244; 247; 250; 1)
+Botón constructor (oculto)
+btnBuildCalMant → Visible
+powerfx
+false
+btnBuildCalMant → OnSelect
+powerfx
+With(
+    {
+        y: Year(gloCalRefMant);
+        m: Month(gloCalRefMant);
+        offset: Weekday(gloCalRefMant; StartOfWeek.Sunday) - 1;
+        dias: Day(DateAdd(DateAdd(gloCalRefMant; 1; TimeUnit.Months); -1; TimeUnit.Days))
+    };
+    ClearCollect(
+        colCalCeldasMant;
+        ForAll(
+            Sequence(RoundUp((offset + dias) / 7; 0) * 7) As E;
+            With(
+                {d: E.Value - offset};
+                {
+                    Idx: E.Value;
+                    EsVacia: d < 1 || d > dias;
+                    Dia: If(d < 1 || d > dias; 0; d);
+                    FechaCelda: If(d >= 1 && d <= dias; Date(y; m; d))
+                }
+            )
+        )
+    )
+)
+
+Un solo ForAll genera las 35 o 42 celdas de golpe, así que el esquema queda definido en una sola operación. RoundUp decide si el mes necesita 5 o 6 semanas.
+
+gloCalRefMant siempre debe apuntar al día 1 del mes; de eso depende el cálculo de offset.
+
+PASO 6 — Tarjetas KPI
+cardTotMant > lblValTot → Text
+powerfx
+CountRows(
+    Filter(
+        colDBCal As R;
+        Year(R.FECHAMANT) = Year(gloCalRefMant);
+        Month(R.FECHAMANT) = Month(gloCalRefMant);
+        (IsBlank(TI01_2.Value)
+          || StartsWith(R.AREA; TI01_2.Value)
+          || StartsWith(R.MODULO; TI01_2.Value)
+          || StartsWith(R.DESCRIPCION; TI01_2.Value)
+          || StartsWith(R.CATEGORIA; TI01_2.Value)
+          || StartsWith(R.USO; TI01_2.Value))
+    )
+)
+cardTotMant > lblTitTot → Text
+powerfx
+"Total del mes"
+cardVenMant > lblValVen → Text
+powerfx
+CountRows(
+    Filter(
+        colDBCal As R;
+        R.ESTADOCALC = "VENCIDO";
+        Year(R.FECHAMANT) = Year(gloCalRefMant);
+        Month(R.FECHAMANT) = Month(gloCalRefMant);
+        (IsBlank(TI01_2.Value)
+          || StartsWith(R.AREA; TI01_2.Value)
+          || StartsWith(R.MODULO; TI01_2.Value)
+          || StartsWith(R.DESCRIPCION; TI01_2.Value)
+          || StartsWith(R.CATEGORIA; TI01_2.Value)
+          || StartsWith(R.USO; TI01_2.Value))
+    )
+)
+cardVenMant > lblTitVen → Text
+powerfx
+"Vencido"
+
+Para cardPorMant > lblValPor copia la fórmula anterior cambiando "VENCIDO" por "POR VENCER" (título "Por vencer"), y para cardVigMant > lblValVig por "VIGENTE" (título "Vigente").
+
+Barra lateral de color de cada tarjeta (Rectangle → Fill):
+
+cardTotMant → RGBA(22; 39; 58; 1)
+cardVenMant → RGBA(204; 0; 0; 1)
+cardPorMant → RGBA(232; 160; 32; 1)
+cardVigMant → RGBA(22; 163; 74; 1)
+PASO 7 — Navegación de mes
+icoMesPrev → Icon
+powerfx
+"ChevronLeft"
+icoMesPrev → OnSelect
+powerfx
+Set(gloCalRefMant; DateAdd(gloCalRefMant; -1; TimeUnit.Months));;
+Select(btnBuildCalMant)
+icoMesNext → Icon
+powerfx
+"ChevronRight"
+icoMesNext → OnSelect
+powerfx
+Set(gloCalRefMant; DateAdd(gloCalRefMant; 1; TimeUnit.Months));;
+Select(btnBuildCalMant)
+lblCalMesMant → Text
+powerfx
+Upper(Text(gloCalRefMant; "mmmm yyyy"; "es-ES"))
+Encabezado de días — lblD1…lblD7 → Text
+
+"DOM", "LUN", "MAR", "MIÉ", "JUE", "VIE", "SÁB"
+
+Cada uno con AlignInContainer = AlignInContainer.Stretch, FillPortions = 1, Align = Align.Center, FontWeight = FontWeight.Semibold, Size = 10.
+
+PASO 8 — Cuadrícula del calendario
+glCalMant → Items
+powerfx
+colCalCeldasMant
+glCalMant → WrapCount
+powerfx
+7
+glCalMant → TemplateSize
+powerfx
+110
+glCalMant → TemplatePadding
+powerfx
+1
+glCalMant → Fill
+powerfx
+RGBA(226; 232; 238; 1)
+glCalMant → Width
+powerfx
+Parent.Width
+glCalMant → ShowScrollbar
+powerfx
+false
+celCalMant → Fill
+powerfx
+If(
+    ThisItem.EsVacia;
+    RGBA(244; 247; 250; 1);
+    ThisItem.FechaCelda = Today();
+    RGBA(232; 244; 253; 1);
+    RGBA(255; 255; 255; 1)
+)
+celCalMant → Height
+powerfx
+Parent.TemplateHeight
+celCalMant → Width
+powerfx
+Parent.TemplateWidth
+htmlCelMant → HtmlText
+
+Aquí está el corazón del calendario. Los conteos se calculan en vivo, así que responden a TI01_2 y TabList2 sin reconstruir:
+
+powerfx
+If(
+    ThisItem.EsVacia;
+    "";
+    With(
+        {
+            items:
+                Filter(
+                    colDBCal As R;
+                    R.FECHAMANT = ThisItem.FechaCelda;
+                    (IsBlank(TI01_2.Value)
+                      || StartsWith(R.AREA; TI01_2.Value)
+                      || StartsWith(R.MODULO; TI01_2.Value)
+                      || StartsWith(R.DESCRIPCION; TI01_2.Value)
+                      || StartsWith(R.CATEGORIA; TI01_2.Value)
+                      || StartsWith(R.USO; TI01_2.Value));
+                    (TabList2.Selected.Value = "TODOS" || R.ESTADOCALC = TabList2.Selected.Value)
+                )
+        };
+        With(
+            {
+                nV: CountRows(Filter(items; ESTADOCALC = "VENCIDO"));
+                nP: CountRows(Filter(items; ESTADOCALC = "POR VENCER"));
+                nG: CountRows(Filter(items; ESTADOCALC = "VIGENTE"));
+                tot: CountRows(items)
+            };
+            "<div style='font-family:Segoe UI;font-size:13px;height:100%'>" &
+            "<div style='font-weight:600;color:" &
+                If(ThisItem.FechaCelda = Today(); "#1f8fcf"; "#5a6b7b") &
+            "'>" & Text(ThisItem.Dia) & "</div>" &
+            If(
+                tot > 0;
+                "<div style='display:flex;height:7px;border-radius:4px;overflow:hidden;margin:6px 0;background:#f4f8fc'>" &
+                If(nV > 0; "<i style='background:#cc0000;flex:" & Text(nV) & "'></i>"; "") &
+                If(nP > 0; "<i style='background:#e8a020;flex:" & Text(nP) & "'></i>"; "") &
+                If(nG > 0; "<i style='background:#16a34a;flex:" & Text(nG) & "'></i>"; "") &
+                "</div>" &
+                "<div style='display:flex;flex-direction:column;gap:2px;font-size:10px;color:#5a6b7b'>" &
+                If(nV > 0; "<div>● Vencido <b style='float:right;color:#16273a'>" & Text(nV) & "</b></div>"; "") &
+                If(nP > 0; "<div>● Por vencer <b style='float:right;color:#16273a'>" & Text(nP) & "</b></div>"; "") &
+                If(nG > 0; "<div>● Vigente <b style='float:right;color:#16273a'>" & Text(nG) & "</b></div>"; "") &
+                "</div>";
+                ""
+            ) &
+            "</div>"
+        )
+    )
+)
+btnCelMant → OnSelect
+powerfx
+Set(gloCalDiaSelMant; ThisItem.FechaCelda);;
+Set(varDrawerCalMant; true)
+btnCelMant → Visible
+powerfx
+!ThisItem.EsVacia
+btnCelMant → Height
+powerfx
+Parent.TemplateHeight
+btnCelMant → Width
+powerfx
+Parent.TemplateWidth
+btnCelMant → Fill, HoverFill, PressedFill, BorderColor
+powerfx
+RGBA(0; 0; 0; 0)
+btnCelMant → Text
+
+Déjala vacía.
+
+PASO 9 — Panel del día seleccionado
+conDrawerCalMant → Visible
+powerfx
+varDrawerCalMant
+conDrawerCalMant → Fill
+powerfx
+RGBA(16; 30; 44; 0,45)
+conDrawerCalMant → Height / Width
+powerfx
+Parent.Height
+powerfx
+Parent.Width
+btnScrimCalMant → OnSelect
+powerfx
+Set(varDrawerCalMant; false)
+
+Con Fill, HoverFill, PressedFill en RGBA(0; 0; 0; 0) y tamaño Parent.Height / Parent.Width.
+
+pnlDiaMant → Width
+powerfx
+Min(900; Parent.Width - 60)
+pnlDiaMant → Height
+powerfx
+Min(600; Parent.Height - 80)
+pnlDiaMant → X
+powerfx
+(Parent.Width - Self.Width) / 2
+pnlDiaMant → Y
+powerfx
+(Parent.Height - Self.Height) / 2
+pnlDiaMant → Fill
+powerfx
+RGBA(255; 255; 255; 1)
+lblDiaMantTit → Text
+powerfx
+"📅 " & Text(gloCalDiaSelMant; "dddd dd/mm/yyyy"; "es-ES") &
+"   ·   " & CountRows(glDiaMant.AllItems) & " actividad(es)"
+glDiaMant → Items
+powerfx
+Sort(
+    Filter(
+        colDBCal As R;
+        R.FECHAMANT = gloCalDiaSelMant;
+        (IsBlank(TI01_2.Value)
+          || StartsWith(R.AREA; TI01_2.Value)
+          || StartsWith(R.MODULO; TI01_2.Value)
+          || StartsWith(R.DESCRIPCION; TI01_2.Value)
+          || StartsWith(R.CATEGORIA; TI01_2.Value)
+          || StartsWith(R.USO; TI01_2.Value));
+        (TabList2.Selected.Value = "TODOS" || R.ESTADOCALC = TabList2.Selected.Value)
+    );
+    AREA;
+    SortOrder.Ascending
+)
+glDiaMant → TemplateSize
+powerfx
+50
+Etiquetas de la fila
+Control	Propiedad	Fórmula
+lblDA	Text	ThisItem.AREA & " · " & ThisItem.MODULO
+lblDM	Text	ThisItem.DESCRIPCION
+lblDF	Text	Text(ThisItem.DIAS; "###0") & " días"
+lblDE	Text	ThisItem.ESTADOCALC
+lblDE → Fill
+powerfx
+Switch(
+    ThisItem.ESTADOCALC;
+    "VENCIDO"; RGBA(204; 0; 0; 1);
+    "POR VENCER"; RGBA(232; 160; 32; 1);
+    RGBA(22; 163; 74; 1)
+)
+lblDE → Color
+powerfx
+RGBA(255; 255; 255; 1)
+filaDiaMant → Fill
+powerfx
+If(
+    !IsEmpty(Filter(colCarritoPreventivo; ID = ThisItem.IDSP));
+    RGBA(200; 230; 255; 1);
+    RGBA(255; 255; 255; 1)
+)
+btnDiaSel (transparente sobre la fila) → OnSelect
+powerfx
+If(
+    !IsEmpty(Filter(colCarritoPreventivo; ID = ThisItem.IDSP));
+    RemoveIf(colCarritoPreventivo; ID = ThisItem.IDSP);
+    Collect(colCarritoPreventivo; LookUp(DB; ID = ThisItem.IDSP))
+)
+
+Se recupera el registro real de DB con LookUp, no el aplanado, para que 05CARRITOPREVENTIVO reciba el esquema que espera.
+
+btnCerrarDia → OnSelect
+powerfx
+Set(varDrawerCalMant; false)
+btnCerrarDia → Text
+powerfx
+"Cerrar"
+btnAgregarDia → OnSelect
+powerfx
+If(
+    IsEmpty(colCarritoPreventivo);
+    Notify("Selecciona al menos una actividad."; NotificationType.Warning);
+    Set(varOrigenSolicitud; "PREVENTIVO");;
+    Set(varDrawerCalMant; false);;
+    Navigate('05CARRITOPREVENTIVO'; ScreenTransition.Cover)
+)
+btnAgregarDia → Text
+powerfx
+"Agregar (" & CountRows(colCarritoPreventivo) & ")"
+btnAgregarDia → DisplayMode
+powerfx
+If(IsEmpty(colCarritoPreventivo); DisplayMode.Disabled; DisplayMode.Edit)
+PASO 10 — Corrección en la vista de lista
+
+Tu glD01_2 tiene una inconsistencia que conviene arreglar de paso: OnSelect y btnD01_4 agregan a colCarritoPreventivo, pero TemplateFill lee colCarritoSolicitudes. Por eso la fila no se resalta al seleccionarla.
+
+glD01_2 → TemplateFill
+powerfx
+If(
+    !IsEmpty(Filter(colCarritoPreventivo; ID = ThisItem.ID));
+    RGBA(200; 230; 255; 1);
+    RGBA(255; 255; 255; 1)
+)
+btnD01_4 → OnSelect
+powerfx
+If(
+    !IsEmpty(Filter(colCarritoPreventivo; ID = ThisItem.ID));
+    RemoveIf(colCarritoPreventivo; ID = ThisItem.ID);
+    Collect(colCarritoPreventivo; ThisItem)
+)
+
+ThisItem in colCarritoPreventivo compara el registro completo y falla si algún campo difiere; comparar por ID es estable.
