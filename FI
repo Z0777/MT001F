@@ -1,0 +1,429 @@
+btnTabPipe → OnSelect
+powerfx
+Set(varSeccionActiva; "Pipeline")
+btnTabPipe → Fill
+powerfx
+If(varSeccionActiva = "Pipeline"; clrBrand; RGBA(255; 255; 255; 0,06))
+btnTabCal → OnSelect
+powerfx
+Set(varSeccionActiva; "Calendario");;
+Select(btnBuildCalM1)
+btnTabCal → Fill
+powerfx
+If(varSeccionActiva = "Calendario"; clrBrand; RGBA(255; 255; 255; 0,06))
+btnTabCarga → OnSelect
+powerfx
+Set(varSeccionActiva; "Gantt");;
+Select(btnBuildGantt1)
+btnTabCarga → Text
+powerfx
+"Gantt"
+btnTabCarga → Fill
+powerfx
+If(varSeccionActiva = "Gantt"; clrBrand; RGBA(255; 255; 255; 0,06))
+btnTablExport → Visible
+powerfx
+false
+btnTabTiempos → Visible
+powerfx
+false
+conMarca → Visible
+powerfx
+false
+OnVisible de la pantalla
+SOLICITUD DE MANTENIMIENTO → OnVisible
+powerfx
+UpdateContext({
+    filtroEstado: "TODOS";
+    filtroPrioridad: "TODAS";
+    mostrarFormulario: false;
+    newMode: false;
+    editMode: false;
+    processMode: false;
+    finishMode: false;
+    deleteMode: false;
+    isItemSelected: false
+});;
+Set(varPanelMantAbierto; false);;
+Set(varPersonalMantAbierto; false);;
+Set(varEvidenciaAbierta; false);;
+Set(varDrawerCalM; false)
+PARTE D — Fórmulas rotas que quedaron
+D.1 vCalMant
+recBar1_7 → Fill
+
+Tiene clrExportColorValue(hexFin), dos expresiones pegadas.
+
+powerfx
+ColorValue(hexFin)
+recBar1_4 → Fill
+powerfx
+ColorValue("#16273a")
+lblKD1_5 → Text (igual en lblKD1_6)
+powerfx
+"este mes"
+D.2 vPipeMant1
+
+Las tarjetas 2, 3 y 4 siguen apuntando a colTrz y a txtPipeMant1.
+
+lblKV1_13 → Text
+powerfx
+CountRows(
+    Filter(
+        DBASIG;
+        ESTADO.Value = "ASIGNADO";
+        Year(CREADO) = varAnioFiltro;
+        (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value);
+        (IsBlank(txtPipeMant1.Text)
+          || StartsWith(AREA; txtPipeMant1.Text)
+          || StartsWith(DESCRIPCION; txtPipeMant1.Text)
+          || StartsWith(RESPONSABLE; txtPipeMant1.Text))
+    )
+)
+
+lblKV1_14 y lblKV1_15: la misma fórmula cambiando "ASIGNADO" por "EN PROCESO" y "FINALIZADO".
+
+lblKD1_13 → Text
+powerfx
+"en cola"
+lblKD1_14 → Text
+powerfx
+"ejecutándose"
+lblKD1_15 → Text
+powerfx
+"cerradas"
+
+El combo se llama cmbTipoPipe1 en tu YAML, no cmbPipeAct. Renómbralo a cmbPipeAct en el árbol, o cambia las cuatro fórmulas para usar cmbTipoPipe1. Recomiendo renombrarlo.
+
+glKbSol → Items
+
+Sigue en colTrz.
+
+powerfx
+Sort(
+    Filter(
+        DBASIG;
+        Year(CREADO) = varAnioFiltro;
+        (varMesFiltro = 0 || Month(CREADO) = varMesFiltro);
+        (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value);
+        (varEstadoFiltro = "TODOS" || ESTADO.Value = varEstadoFiltro);
+        (IsBlank(txtPipeMant1.Text)
+          || StartsWith(AREA; txtPipeMant1.Text)
+          || StartsWith(DESCRIPCION; txtPipeMant1.Text)
+          || StartsWith(RESPONSABLE; txtPipeMant1.Text))
+    );
+    CREADO;
+    SortOrder.Descending
+)
+Label89 → Text
+
+Tiene una expresión booleana como texto.
+
+powerfx
+"⚠ atrasada"
+Label89 → Visible
+powerfx
+IsBlank(ThisItem.'FIN REAL') && !IsBlank(ThisItem.COMPROMISO) && ThisItem.COMPROMISO < Today()
+efiltro → OnSelect
+powerfx
+Reset(txtPipeMant1);;
+Set(varEstadoFiltro; "TODOS")
+btnFTodas → Color
+
+Los cinco botones de filtro usan gloPipeFiltro, que ya no existe.
+
+powerfx
+If(varEstadoFiltro = "TODOS"; Color.White; clrInk)
+btnFTodas → Fill
+powerfx
+If(varEstadoFiltro = "TODOS"; clrBrand; clrSurface)
+
+Mismo patrón: btnFSiembra → "PENDIENTE", btnFColecta → "ASIGNADO", btnFExpSem → "EN PROCESO", btnFExpTej → "FINALIZADO".
+
+ddDesde01 → Visible (igual en ddHasta01)
+powerfx
+false
+D.3 vKpiMant
+
+Las cinco tarjetas siguen en colTrz.
+
+lblKV1_16 → Text · Cumplimiento
+powerfx
+With(
+    {
+        fin: Filter(
+            DBASIG;
+            ESTADO.Value = "FINALIZADO";
+            Year(CREADO) = varAnioFiltro;
+            (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value)
+        )
+    };
+    If(
+        CountRows(fin) = 0;
+        "—";
+        Text(
+            CountRows(Filter(fin; !IsBlank(COMPROMISO) && !IsBlank('FIN REAL') && 'FIN REAL' <= COMPROMISO)) /
+            CountRows(fin) * 100;
+            "[$-en-US]0"
+        ) & "%"
+    )
+)
+lblKV1_17 → Text · Tiempo respuesta
+powerfx
+With(
+    {
+        d: Filter(
+            DBASIG;
+            !IsBlank(ASIGNACION);
+            Year(CREADO) = varAnioFiltro;
+            (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value)
+        )
+    };
+    If(
+        CountRows(d) = 0;
+        "—";
+        Text(Average(d As R; DateDiff(R.CREADO; R.ASIGNACION; TimeUnit.Days)); "[$-en-US]0.#") & " d"
+    )
+)
+lblKV1_18 → Text · Tiempo ejecución
+powerfx
+With(
+    {
+        d: Filter(
+            DBASIG;
+            !IsBlank('FIN REAL');
+            !IsBlank(ASIGNACION);
+            Year(CREADO) = varAnioFiltro;
+            (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value)
+        )
+    };
+    If(
+        CountRows(d) = 0;
+        "—";
+        Text(Average(d As R; DateDiff(R.ASIGNACION; R.'FIN REAL'; TimeUnit.Days)); "[$-en-US]0.#") & " d"
+    )
+)
+lblKV1_20 → Text · Atrasadas
+powerfx
+CountRows(
+    Filter(
+        DBASIG;
+        IsBlank('FIN REAL');
+        !IsBlank(COMPROMISO);
+        COMPROMISO < Today();
+        (cmbPipeAct.Selected.Value = "TODOS" || TIPO.Value = cmbPipeAct.Selected.Value)
+    )
+)
+lblKV1_19 → Text · Activos vencidos
+powerfx
+CountRows(Filter(DB; ESTADO.Value = "VENCIDO"))
+htmlKpiCat → HtmlText
+
+Está vacío.
+
+powerfx
+"<div style='font-family:Segoe UI;font-size:12px'>" &
+"<div style='font-weight:600;color:#16273a;margin-bottom:8px'>Distribución por categoría</div>" &
+"<table style='width:100%;border-collapse:collapse'>" &
+"<tr style='background:#092162;color:#fff'>" &
+"<th style='padding:6px 10px;text-align:left'>Categoría</th>" &
+"<th style='padding:6px 10px'>Total</th>" &
+"<th style='padding:6px 10px'>Finalizadas</th>" &
+"<th style='padding:6px 10px'>Atrasadas</th></tr>" &
+Concat(
+    Distinct(
+        Filter(DBASIG; Year(CREADO) = varAnioFiltro; !IsBlank(CATEGORIA));
+        CATEGORIA
+    ) As C;
+    With(
+        {base: Filter(DBASIG; CATEGORIA = C.Value; Year(CREADO) = varAnioFiltro)};
+        "<tr>" &
+        "<td style='padding:5px 10px;border-bottom:1px solid #eef2f6'>" & C.Value & "</td>" &
+        "<td style='padding:5px 10px;border-bottom:1px solid #eef2f6;text-align:center'>" &
+        Text(CountRows(base)) & "</td>" &
+        "<td style='padding:5px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#16a34a;font-weight:600'>" &
+        Text(CountRows(Filter(base; ESTADO.Value = "FINALIZADO"))) & "</td>" &
+        "<td style='padding:5px 10px;border-bottom:1px solid #eef2f6;text-align:center;color:#cc0000;font-weight:600'>" &
+        Text(CountRows(Filter(base; IsBlank('FIN REAL') && !IsBlank(COMPROMISO) && COMPROMISO < Today()))) &
+        "</td></tr>"
+    )
+) &
+"</table></div>"
+htmlKpiCat → Height
+powerfx
+400
+D.4 conDiaCalM
+Container83 → Visible
+
+Está en false. Sin esto el panel del día nunca aparece.
+
+powerfx
+true
+Container83 → Width
+powerfx
+Min(550; Parent.Width)
+btnDiaM → Fill, HoverFill, PressedFill, BorderColor
+powerfx
+RGBA(0; 0; 0; 0)
+btnDiaM → Text
+
+Déjala vacía.
+
+btnDiaM → Height
+powerfx
+Parent.TemplateHeight
+btnDiaM → Width
+powerfx
+Parent.TemplateWidth
+glDiaM → TemplateSize
+powerfx
+55
+D.5 Panel — reordenar y corregir
+cntSec1 → Height
+powerfx
+360
+htmlInfoMant → Height
+powerfx
+320
+htmlInfoMant → AlignInContainer
+powerfx
+AlignInContainer.Stretch
+txtComentMant → Default
+
+Tiene el hint como valor por defecto, lo que hace que se guarde ese texto.
+
+powerfx
+""
+txtComentMant → HintText
+powerfx
+"Comentario / motivo del cambio"
+cmbEstadoMant → ItemDisplayText
+powerfx
+ThisItem.Value
+cmbPrioridadMant → DisplayMode
+powerfx
+If(cmbEstadoMant.Selected.Value = "FINALIZADO"; DisplayMode.View; DisplayMode.Edit)
+btnGuardar → OnSelect
+
+En tu YAML falta el ; entre el Switch y el Office365Outlook.SendEmailV2. Localiza esta parte:
+
+                                    )
+                                )
+
+                                    Office365Outlook.SendEmailV2(
+
+y cámbiala por:
+
+                                    )
+                                );
+
+                                    Office365Outlook.SendEmailV2(
+
+Sin ese punto y coma la fórmula no encadena y marca error de sintaxis.
+
+Reordenar en cntPanelBody
+
+lblSecFlujo y htmlFlujoMant quedaron después de cntPanelFooter. Arrástralos en el árbol para que el orden sea:
+
+cntSec1
+lblSecFlujo
+htmlFlujoMant
+cntSec3
+cntPanelFooter
+htmlFlujoMant → Height
+powerfx
+220
+htmlFlujoMant → AlignInContainer
+powerfx
+AlignInContainer.Stretch
+D.6 cntPreventivos y cntRevision
+cntPreventivos → Width
+
+Está en 80, lo que lo colapsa.
+
+powerfx
+Parent.Width
+cntPreventivos → Height
+powerfx
+Parent.Height
+cntSecundSalidas_13 → Width
+
+También en 80.
+
+powerfx
+Parent.Width
+Tipo_5 → Visible
+powerfx
+false
+glD01_3 → TemplateFill
+
+Usa colCarritoSolicitudes que no existe.
+
+powerfx
+RGBA(255; 255; 255; 1)
+glD01_3 → OnSelect
+powerfx
+false
+btnD02_2 → Visible
+powerfx
+false
+btnD03_3 → OnSelect
+powerfx
+Set(varSeccionActiva; "Correctivo")
+btnD03_3 → Text
+powerfx
+"Correctivo"
+Gallery3_6 → WrapCount
+
+bpCel no es un ScreenSize.
+
+powerfx
+If(Parent.Width >= bpDesktop; 3; Parent.Width >= bpTablet; 2; 1)
+btnAgregar_12 → Visible
+powerfx
+false
+btnNext_15 → OnSelect
+powerfx
+Set(varSeccionActiva; "Correctivo")
+btnNext_15 → Visible
+powerfx
+true
+btnNext_15 → Text
+powerfx
+"Correctivo"
+Container11_4 → Fill (igual en Container12_4)
+
+Usa colCarritorevision, que ya no aplica en este flujo.
+
+powerfx
+Switch(
+    ThisItem.ESTADO.Value;
+    "PENDIENTE"; RGBA(0; 120; 212; 0,15);
+    "ASIGNADO"; RGBA(255; 140; 0; 0,15);
+    RGBA(150; 150; 150; 0,1)
+)
+D.7 cntCorrectivos
+lblAnio → DisplayMode
+
+Es un TextInput; así queda solo de lectura.
+
+powerfx
+DisplayMode.View
+lblAnio → Width
+powerfx
+70
+Button33 → Fill
+
+Los cuatro botones de prioridad tienen el mismo rojo. Diferéncialos:
+
+powerfx
+If(varPrioridadFiltro = "Baja 1 semana"; RGBA(180; 140; 0; 1); RGBA(255; 255; 0; 1))
+Button34 → Fill
+powerfx
+If(varPrioridadFiltro = "Media 72 hrs"; RGBA(0; 80; 150; 1); RGBA(0; 120; 212; 1))
+Button32 → Fill
+powerfx
+If(varPrioridadFiltro = "Alta 24 hrs"; RGBA(180; 90; 0; 1); RGBA(255; 140; 0; 1))
+HeaderContainer2_3 → Visible
+powerfx
+false
