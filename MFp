@@ -1,0 +1,229 @@
+# Correcciones: cntSec1, btnBuildCarga y errores de Fill
+
+---
+
+## 1. Qué había en `cntSec1` y cómo debe quedar
+
+### Estructura original (heredada de plaguicidas)
+
+```
+cntSec1                    ← GroupContainer AutoLayout VERTICAL
+├── lblSec1                ← Label "1. FLUJO ACTUAL"
+├── Container17_1          ← Horizontal
+│   ├── cmbPlaga           ← ModernCombobox (plagas)
+│   └── ddCultivo          ← ModernCombobox (cultivos)
+├── cntGrid1               ← Horizontal
+│   ├── cmbAplicacion      ← ModernCombobox (aspersión/drench)
+│   ├── ddDia              ← ModernCombobox (día)
+│   └── ddHorario          ← ModernCombobox (06:00 / 16:00)
+└── cntGrid2               ← Horizontal
+    ├── Button4_1          ← botón APLICADOR
+    ├── cmbResponsable     ← ModernCombobox (oculto)
+    ├── lblContResp        ← Label contador
+    ├── ddEstado           ← ModernCombobox de estado
+    └── cmbHorasInvertidas ← ModernCombobox
+```
+
+Todo eso era de plaguicidas. Se eliminó `Container17_1`, `cntGrid1`, `lblContResp`, `cmbResponsable`, `cmbHorasInvertidas` y después `cntGrid2` completo. También se borró `htmlInfoMant`, y por eso quedó solo el contenedor con `lblSec1`.
+
+### Estructura que debe tener ahora
+
+```
+cntSec1                    ← GroupContainer AutoLayout VERTICAL
+├── lblSec1                ← Label "1. INFORMACIÓN GENERAL"
+└── htmlInfoMant           ← HtmlViewer  ← RECREAR
+```
+
+Solo dos hijos. Toda la información del registro se dibuja en el HtmlViewer.
+
+### Propiedades de `cntSec1`
+
+| Propiedad | Valor |
+|---|---|
+| `LayoutDirection` | `LayoutDirection.Vertical` |
+| `Height` | `360` |
+| `FillPortions` | `0` |
+| `Fill` | `RGBA(239; 246; 255; 1)` |
+| `RadiusTopLeft` … `RadiusBottomRight` | `12` |
+| `PaddingLeft` / `PaddingRight` / `PaddingTop` / `PaddingBottom` | `5` |
+| `LayoutGap` | `4` |
+
+### `lblSec1` → `Text`
+
+```powerfx
+"1. INFORMACIÓN GENERAL"
+```
+
+### Recrear `htmlInfoMant`
+
+Insertar → Multimedia → **Visor HTML**, dentro de `cntSec1`, debajo de `lblSec1`.
+
+#### `htmlInfoMant` → `HtmlText`
+
+```powerfx
+With(
+    {
+        r: varRegMant;
+        est: Coalesce(varRegMant.ESTADO.Value; "—");
+        pri: Coalesce(varRegMant.PRIORIDADES.Value; "—")
+    };
+    With(
+        {
+            colEst: Switch(
+                est;
+                "PENDIENTE"; hexPend;
+                "ASIGNADO"; hexAsig;
+                "EN PROCESO"; hexProc;
+                "FINALIZADO"; hexFin;
+                "#94a3b8"
+            );
+            dias: If(
+                !IsBlank(r.'FIN REAL');
+                DateDiff(r.CREADO; r.'FIN REAL'; TimeUnit.Days);
+                DateDiff(r.CREADO; Today(); TimeUnit.Days)
+            )
+        };
+        "<div style='font-family:Segoe UI;font-size:12px'>" &
+        "<div style='display:flex;gap:8px;margin-bottom:10px'>" &
+        "<span style='background:" & colEst & ";color:#fff;padding:4px 12px;border-radius:12px;font-weight:600'>" & est & "</span>" &
+        "<span style='background:#eef2f6;color:#16273a;padding:4px 12px;border-radius:12px'>" & pri & "</span>" &
+        "</div>" &
+        "<table style='width:100%;border-collapse:collapse'>" &
+        Concat(
+            Table(
+                {k: "Área"; v: Coalesce(r.AREA; "—")};
+                {k: "Descripción"; v: Coalesce(r.DESCRIPCION; "—")};
+                {k: "Categoría"; v: Coalesce(r.CATEGORIA; "—")};
+                {k: "Solicitado por"; v: Coalesce(r.SOLICITANTE; "—")};
+                {k: "Creado"; v: If(IsBlank(r.CREADO); "—"; Text(r.CREADO; "dd/mm/yyyy"))};
+                {k: "Asignado"; v: If(IsBlank(r.ASIGNACION); "pendiente"; Text(r.ASIGNACION; "dd/mm/yyyy"))};
+                {k: "Compromiso"; v: If(IsBlank(r.COMPROMISO); "pendiente"; Text(r.COMPROMISO; "dd/mm/yyyy"))};
+                {k: "Inicio real"; v: If(IsBlank(r.'INICIO REAL'); "pendiente"; Text(r.'INICIO REAL'; "dd/mm/yyyy"))};
+                {k: "Fin real"; v: If(IsBlank(r.'FIN REAL'); "pendiente"; Text(r.'FIN REAL'; "dd/mm/yyyy"))};
+                {k: "Responsable"; v: Coalesce(r.RESPONSABLE; "sin asignar")};
+                {
+                    k: If(IsBlank(r.'FIN REAL'); "Días transcurridos"; "Días hasta entrega");
+                    v: Text(dias) & " días"
+                }
+            ) As I;
+            "<tr><td style='padding:5px 8px;border-bottom:1px solid #eef2f6;color:#5a6b7b;font-weight:600;white-space:nowrap'>" &
+            I.k & "</td><td style='padding:5px 8px;border-bottom:1px solid #eef2f6;color:#16273a'>" & I.v & "</td></tr>"
+        ) &
+        "</table></div>"
+    )
+)
+```
+
+#### `htmlInfoMant` → `Height`
+
+```powerfx
+320
+```
+
+#### `htmlInfoMant` → `AlignInContainer`
+
+```powerfx
+AlignInContainer.Stretch
+```
+
+#### `htmlInfoMant` → `FillPortions`
+
+```powerfx
+1
+```
+
+---
+
+## 2. Lógica de `btnBuildCarga` (en tu pantalla: `btnBuildGantt1`)
+
+Es un **botón oculto que actúa como procedimiento**. No se presiona: se dispara con `Select(btnBuildGantt1)` desde `btnTabCarga` y desde las flechas de navegación del gantt.
+
+Construye dos colecciones:
+
+**`colCargaDias`** — el eje horizontal. 28 días consecutivos desde `cargaAnchor`. Lo consume `htmlGanttHead` para dibujar la fila de encabezado con los números de día.
+
+**`colCargaFilas`** — una fila por tarea. Para cada registro calcula:
+
+- `li` = días entre `cargaAnchor` y `ASIGNACION`, acotado a 0–27
+- `fin` = días entre `cargaAnchor` y `COMPROMISO`, acotado a 0–27
+- `LeftPct` = `li / 28 * 100` → dónde empieza la barra
+- `WidthPct` = `(fin - li + 1) / 28 * 100` → qué tan ancha es
+
+`htmlLaneM` usa esos dos porcentajes en el CSS (`left:X%; width:Y%`) para posicionar la barra dentro de la fila. Eso es todo el "gantt": posicionamiento porcentual sobre una ventana fija de 28 días.
+
+`Max(0; Min(27; ...))` recorta las tareas que empiezan antes o terminan después de la ventana visible, para que la barra no se salga.
+
+La fórmula que ya está en `btnBuildGantt1` es correcta. Solo confirmar que el `Items` de `glGantt` sea `colCargaFilas`.
+
+---
+
+## 3. Los tres errores de `Fill`
+
+### 3.1 `recGrp` → `Fill`
+
+```powerfx
+ColorValue(ThisItem.GrupoHex)
+```
+
+`GrupoHex` existía en la versión SPA de `colCargaFilas`, que tenía filas de dos tipos: cabeceras de grupo (Siembra/Colecta/Exportación) y filas de datos. El `colCargaFilas` nuevo no agrupa — cada fila es una tarea — así que ese campo ya no existe.
+
+**Solución: eliminar `grpBand` completo** (con `recGrp` y `lblGrp`), dentro de `vGanttMant1 > glGantt > conGFila`.
+
+### 3.2 `recCargaCul` → `Fill`
+
+```powerfx
+ColorValue(ThisItem.AreaHex)
+```
+
+Vive dentro de `glCargaSets`, cuya propiedad `Items` está vacía. Sin `Items` no hay `ThisItem`, y `AreaHex` tampoco existe en el esquema nuevo.
+
+**Solución: eliminar `glCargaSets` completo** (arrastra también `rowHeadRec_2`, `recCargaCul`, `lblCgSet`, `lblCgArea`, `lblCgRango`, `lblRReq_1`, `lblCgTarde`, `lblREst_1`, `Button9_2`).
+
+Eliminar también **`rowHeadRec_3`**, que es su encabezado y usa `clrDanger`.
+
+### 3.3 `glD01_3` → el error está en `TemplateFill`, no en `Fill`
+
+`Fill` es `RGBA(214; 221; 224; 1)` y está bien. El error rojo viene de:
+
+```powerfx
+If(
+    ThisItem in colCarritoSolicitudes;
+    RGBA(200; 230; 255; 1);
+    RGBA(255; 255; 255; 1)
+)
+```
+
+`colCarritoSolicitudes` nunca se declara en el `OnStart`. Además `ThisItem in <colección>` compara el registro completo y falla si algún campo difiere.
+
+#### `glD01_3` → `TemplateFill`
+
+```powerfx
+RGBA(255; 255; 255; 1)
+```
+
+Ya no se usa carrito en preventivo: se abre el panel directamente desde `btnD01_6`.
+
+#### `glD01_3` → `OnSelect`
+
+También usa `colCarritoPreventivo` con `in`. Dejarla en:
+
+```powerfx
+false
+```
+
+---
+
+## 4. Resumen de acciones
+
+| Acción | Control | Ubicación |
+|---|---|---|
+| **Crear** | `htmlInfoMant` (HtmlViewer) | dentro de `cntSec1`, bajo `lblSec1` |
+| **Eliminar** | `grpBand` (con `recGrp`, `lblGrp`) | `vGanttMant1 > glGantt > conGFila` |
+| **Eliminar** | `glCargaSets` completo | `vGanttMant1` |
+| **Eliminar** | `rowHeadRec_3` | `vGanttMant1` |
+| **Cambiar** | `glD01_3` → `TemplateFill` y `OnSelect` | `cntPreventivos` |
+| **Cambiar** | `cntSec1` → `Height`, `Fill`, `LayoutDirection` | `cntPanelBody` |
+| **Cambiar** | `lblSec1` → `Text` | `cntSec1` |
+
+Después de eliminar `grpBand` revisar `conGFila`: deben quedar solo `htmlLaneM` y `btnGFila`, ambos con `Height = Parent.Height` y `Width = Parent.Width`.
+
